@@ -1,0 +1,12 @@
+[package]
+name = "jlr-mandelbrot"
+version = "0.1.0"
+authors = ["Jean-Luc Romano <jl_post@hotmail.com>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chrono = "0.4.23"
+image = "0.23"
+minifb = "0.23"
