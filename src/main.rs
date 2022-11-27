@@ -158,7 +158,7 @@ fn next_pixel_coordinate_with_offset(row: isize, column: isize,
 // of iterations needed to determine that the coordinate
 // is not part of the Mandelbrot set (or None if it is
 // part of the set).
-fn escape_value(x:f64, y:f64, threshold: Option<f64>) -> Option<usize> {
+fn escape_value(x: f64, y: f64, threshold: Option<f64>) -> Option<usize> {
     let x0 = x;
     let y0 = y;
     let threshold = threshold.unwrap_or(0.0);
@@ -180,6 +180,16 @@ fn escape_value(x:f64, y:f64, threshold: Option<f64>) -> Option<usize> {
         let difference_of_squares = x_squared - y_squared;
         let double_the_product = 2.0 * x_fast * y_fast;
         (x_fast, y_fast) = (difference_of_squares + x0, double_the_product + y0);
+        // Check to see if we've encountered this point before:
+        if threshold == 0.0 {  // (if no threshold was specified)
+            if (x_fast, y_fast) == (x_slow, y_slow) {
+                return None
+            }
+        } else {  // (the threshold was specified)
+            if (x_fast - x_slow).abs() <= threshold && (y_fast - y_slow).abs() <= threshold {
+                return None
+            }
+        }
         iterations += 1;
 
         let x_squared = x_fast * x_fast;
@@ -190,6 +200,16 @@ fn escape_value(x:f64, y:f64, threshold: Option<f64>) -> Option<usize> {
         let difference_of_squares = x_squared - y_squared;
         let double_the_product = 2.0 * x_fast * y_fast;
         (x_fast, y_fast) = (difference_of_squares + x0, double_the_product + y0);
+        // Check to see if we've encountered this point before:
+        if threshold == 0.0 {  // (if no threshold was specified)
+            if (x_fast, y_fast) == (x_slow, y_slow) {
+                return None
+            }
+        } else {  // (the threshold was specified)
+            if (x_fast - x_slow).abs() <= threshold && (y_fast - y_slow).abs() <= threshold {
+                return None
+            }
+        }
         iterations += 1;
 
         let x_squared = x_slow * x_slow;
@@ -197,7 +217,7 @@ fn escape_value(x:f64, y:f64, threshold: Option<f64>) -> Option<usize> {
         let difference_of_squares = x_squared - y_squared;
         let double_the_product = 2.0 * x_slow * y_slow;
         (x_slow, y_slow) = (difference_of_squares + x0, double_the_product + y0);
-
+        // Check to see if we've encountered this point before:
         if threshold == 0.0 {  // (if no threshold was specified)
             if (x_fast, y_fast) == (x_slow, y_slow) {
                 return None
