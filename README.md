@@ -15,5 +15,5 @@ Supports zooming in and out.
  * Type:  git clone https://github.com/Sparrow-guy/jlr-mandelbrot-rust.git
  * Type:  cd jlr-mandelbrot-rust
  * Type:  cargo run
- * Interact:  Left-click zooms in, right-click zooms out.
+ * Interact:  Left-click zooms in; right-click zooms out.
 

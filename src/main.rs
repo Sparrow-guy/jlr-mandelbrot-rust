@@ -14,7 +14,8 @@
 // 2022-11-19:  Drawing the set now happens from the center -> out.
 //              (Instead of from top to bottom.)
 // 2022-11-21:  Added ability to save a screenshot of current image.
-// 2022-11-23:  Added the ability to specify window size with --size=SIZE.
+// 2022-11-23:  Added the ability to specify window size with --size=NUMBER.
+// 2022-11-28:  Added a --bailout=NUMBER switch.
 // ----------
 
 
@@ -70,8 +71,8 @@ fn color(i: Option<usize>) -> (u8, u8, u8) {
     let value1 = (NUM_COLORS_PER_LEG - remainder) * 255 / NUM_COLORS_PER_LEG;
     let value2 = remainder * 255 / NUM_COLORS_PER_LEG;
 
-    let value1 = value1.try_into().unwrap();
-    let value2 = value2.try_into().unwrap();
+    let value1 = value1.try_into().unwrap();  // (Converts from usize to u8.)
+    let value2 = value2.try_into().unwrap();  // (Converts from usize to u8.)
 
     let leg = i / NUM_COLORS_PER_LEG;
     match leg {
@@ -158,7 +159,7 @@ fn next_pixel_coordinate_with_offset(row: isize, column: isize,
 // of iterations needed to determine that the coordinate
 // is not part of the Mandelbrot set (or None if it is
 // part of the set).
-fn escape_value(x: f64, y: f64, threshold: Option<f64>) -> Option<usize> {
+fn calculate_escape_value(x: f64, y: f64, threshold: Option<f64>, bailout: Option<usize>) -> Option<usize> {
     let x0 = x;
     let y0 = y;
     let threshold = threshold.unwrap_or(0.0);
@@ -172,8 +173,13 @@ fn escape_value(x: f64, y: f64, threshold: Option<f64>) -> Option<usize> {
     let _start_of_loop = std::time::Instant::now();
 
     loop {
-        let x_squared = x_fast * x_fast;
-        let y_squared = y_fast * y_fast;
+        if let Some(bailout_to_use) = bailout {
+            if iterations == bailout_to_use {
+                return None;
+            }
+        }
+
+        let (x_squared, y_squared) = (x_fast * x_fast, y_fast * y_fast);
         if x_squared + y_squared > 4.0 {
             return Some(iterations)
         }
@@ -191,9 +197,13 @@ fn escape_value(x: f64, y: f64, threshold: Option<f64>) -> Option<usize> {
             }
         }
         iterations += 1;
+        if let Some(bailout_to_use) = bailout {
+            if iterations == bailout_to_use {
+                return None;
+            }
+        }
 
-        let x_squared = x_fast * x_fast;
-        let y_squared = y_fast * y_fast;
+        let (x_squared, y_squared) = (x_fast * x_fast, y_fast * y_fast);
         if x_squared + y_squared > 4.0 {
             return Some(iterations)
         }
@@ -211,9 +221,13 @@ fn escape_value(x: f64, y: f64, threshold: Option<f64>) -> Option<usize> {
             }
         }
         iterations += 1;
+        if let Some(bailout_to_use) = bailout {
+            if iterations == bailout_to_use {
+                return None;
+            }
+        }
 
-        let x_squared = x_slow * x_slow;
-        let y_squared = y_slow * y_slow;
+        let (x_squared, y_squared) = (x_slow * x_slow, y_slow * y_slow);
         let difference_of_squares = x_squared - y_squared;
         let double_the_product = 2.0 * x_slow * y_slow;
         (x_slow, y_slow) = (difference_of_squares + x0, double_the_product + y0);
@@ -227,6 +241,8 @@ fn escape_value(x: f64, y: f64, threshold: Option<f64>) -> Option<usize> {
                 return None
             }
         }
+        // Do not increment the iterations variable here,
+        // as we only do so after advancing the "fast" point cycle.
 
         // Remove (or comment-out) the following "continue;" line
         // to allow a "time-out" if calculation gets too long:
@@ -446,6 +462,8 @@ fn get_user_input(window: &minifb::Window,
 
 #[allow(dead_code)]
 fn test_color_function() {
+    println!();
+    println!("Testing the color() function:");
     let n = 0;   println!("{}: {:?}", n, color(Some(n)));
     let n = 15;  println!("{}: {:?}", n, color(Some(n)));
     let n = 30;  println!("{}: {:?}", n, color(Some(n)));
@@ -454,6 +472,7 @@ fn test_color_function() {
     let n = 75;  println!("{}: {:?}", n, color(Some(n)));
     let n = 90;  println!("{}: {:?}", n, color(Some(n)));
     let n = None;  println!("{:?}: {:?}", n, color(n));
+    println!();
 }
 
 
@@ -465,10 +484,11 @@ fn help_text() -> String {
 Program:  JLR-Mandelbrot
           A Mandelbrot set viewer.
 
-Usage:  jlr-mandelbrot [--help] [--size=WIDTH_IN_PIXELS]
+Usage:  jlr-mandelbrot [options]
 Example usages:
    jlr-mandelbrot
-   jlr-mandelbrot --size 256
+   jlr-mandelbrot --size=256
+   jlr-mandelbrot --bailout=150
 
 Options:
    -h, --help
@@ -476,13 +496,17 @@ Options:
    --size=NUMBER
       Displays the image in a square window of NUMBER by NUMBER pixels.
       ({default_size} is the default.)
+   --bailout=NUMBER
+      Uses a bailout number, or a maximum number of iterations.
+      If this number is reached, then a point is considered to
+      be part of the set.  (A bailout number is not used by default.)
 
 Once the image is displayed:
-    A left-click of the mouse zooms in.
-    A right-click of the mouse zooms out.
-    Pressing the S key will save a screenshot in PNG format.
-    Pressing the Q key will quit.
-    Pressing the Escape key will also quit.
+   A left-click of the mouse zooms in.
+   A right-click of the mouse zooms out.
+   Pressing the S key will save a screenshot in PNG format.
+   Pressing the Q key will quit.
+   Pressing the Escape key will also quit.
 
 Author:  Jean-Luc Romano
 e-mail:  {username}@{domain}.{suffix}
@@ -493,22 +517,28 @@ e-mail:  {username}@{domain}.{suffix}
 
 
 #[allow(dead_code)]
-fn test_escape_value_function() {
-    let (x, y) = (0.0, 0.0);  println!("{:?}: {:?}", (x, y), escape_value(x, y, None));
-    let (x, y) = (-1., 0.4);  println!("{:?}: {:?}", (x, y), escape_value(x, y, None));
-    let (x, y) = (0.25, 0.5);  println!("{:?}: {:?}", (x, y), escape_value(x, y, Some(0.001)));
-    let (x, y) = (-1., 0.25);  println!("{:?}: {:?}", (x, y), escape_value(x, y, Some(0.001)));
-    let (x, y) = (-1., -0.25);  println!("{:?}: {:?}", (x, y), escape_value(x, y, Some(0.001)));
-    let (x, y) = (0.25, -0.5);  println!("{:?}: {:?}", (x, y), escape_value(x, y, Some(0.001)));
+fn test_calculate_escape_value_function() {
+    println!();
+    println!("Testing the calculate_escape_value() function:");
+    let (x, y) = (0.0, 0.0);  println!("{:?}: {:?}", (x, y), calculate_escape_value(x, y, None, None));
+    let (x, y) = (-1., 0.4);  println!("{:?}: {:?}", (x, y), calculate_escape_value(x, y, None, None));
+    let (x, y) = (0.25, 0.5);  println!("{:?}: {:?}", (x, y), calculate_escape_value(x, y, Some(0.001), None));
+    let (x, y) = (-1., 0.25);  println!("{:?}: {:?}", (x, y), calculate_escape_value(x, y, Some(0.001), None));
+    let (x, y) = (-1., -0.25);  println!("{:?}: {:?}", (x, y), calculate_escape_value(x, y, Some(0.001), None));
+    let (x, y) = (0.25, -0.5);  println!("{:?}: {:?}", (x, y), calculate_escape_value(x, y, Some(0.001), None));
+    println!();
 }
 
 
 #[allow(dead_code)]
 fn test_next_pixel_coordinate_function() {
+    println!();
+    println!("Testing the next_pixel_coordinate() function:");
     let (mut row, mut column) = (0, 0);  println!("{:?}", (column, row));
     for _ in 0..50 {
         (row, column) = next_pixel_coordinate(row, column);  println!("{:?}", (column, row));
     }
+    println!();
 }
 
 
@@ -517,7 +547,7 @@ fn test_all() {
     println!();
     test_color_function();
     println!();
-    test_escape_value_function();
+    test_calculate_escape_value_function();
     println!();
     test_next_pixel_coordinate_function();
     println!();
@@ -525,9 +555,8 @@ fn test_all() {
 
 
 fn main() {
-    // test_all();  // (Uncomment to do testing.)
-
     let mut window_size_to_use: usize = DEFAULT_WINDOW_SIZE;
+    let mut bailout_value_to_use: Option<usize> = None;
 
     // Parse command-line arguments:
     {
@@ -539,6 +568,11 @@ fn main() {
             } else if still_looking_for_options && (arg == "-h" || arg == "--help") {
                 println!("{}", help_text());
                 return ()
+            } else if still_looking_for_options && arg == "--test" {
+                // --test is an undocumented option;
+                // it is only used for diagnostic purposes.
+                test_all();
+                return ()
             } else if still_looking_for_options && arg.starts_with("--size=") {
                 let size_text = &arg[7..];
                 window_size_to_use = match size_text.parse() {
@@ -549,11 +583,24 @@ fn main() {
                     }
                 };
                 if window_size_to_use == 0 {
-                    println!("Error:  The SIZE in --size=SIZE must be more than zero.");
+                    println!("Error:  The NUMBER in --size=NUMBER must be more than zero.");
                     std::process::exit(1)
                 }
             } else if still_looking_for_options && arg == "--size" {
-                println!("Error:  The --size=SIZE argument seems to be missing the \"=SIZE\" part.");
+                println!("Error:  The --size=NUMBER argument seems to be missing the \"=NUMBER\" part.");
+                println!("        (Did you forget the \"=\" sign?)");
+                std::process::exit(1)
+            } else if still_looking_for_options && arg.starts_with("--bailout=") {
+                let bailout_text = &arg[10..];
+                bailout_value_to_use = match bailout_text.parse() {
+                    Ok(size) => Some(size),
+                    _ => {
+                        println!("Error:  {arg} has an invalid value of \"{bailout_text}\".");
+                        std::process::exit(1)
+                    }
+                };
+            } else if still_looking_for_options && arg == "--bailout" {
+                println!("Error:  The --bailout=NUMBER argument seems to be missing the \"=NUMBER\" part.");
                 println!("        (Did you forget the \"=\" sign?)");
                 std::process::exit(1)
             } else if still_looking_for_options && arg.starts_with("--") {
@@ -597,9 +644,9 @@ fn main() {
         minifb::WindowOptions::default()
     ).expect("Unable to create window.");
 
-    // Limit to max ~60 fps update rate:
+    // Use this to limit to max ~60 fps update rate:
     // window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
-    // window.limit_update_rate(Some(std::time::Duration::from_micros(0)));
+    // Use this to update with no delay:
     window.limit_update_rate(None);
 
     let mut image_buffer: Vec<u32> = vec![0u32; width * height];
@@ -698,8 +745,8 @@ fn main() {
             // Convert row & column into x & y:
             let (x, y) = convert_row_and_column_to_x_and_y(&info, row as isize, column as isize);
 
-            let pixel_value = escape_value(x, y, Some(threshold));
-            let (r, g, b) = color(pixel_value);
+            let escape_value = calculate_escape_value(x, y, Some(threshold), bailout_value_to_use);
+            let (r, g, b) = color(escape_value);
             let color_as_integer = rgb_to_u32(r, g, b);
 
             let i = row * info.width + column;
