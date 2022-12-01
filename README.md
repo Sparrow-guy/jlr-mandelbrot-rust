@@ -4,11 +4,16 @@ Supports zooming in and out.
 
 
 <img src="./jlr-mandelbrot.screenshot.01.png">
+
 <img src="./jlr-mandelbrot.screenshot.02.png">
 
+Julia sets are also supported:
 
-## Quick Installation:
- * Install Rust, if not already installed.
+<img src="./jlr-mandelbrot.screenshot.03.png">
+
+
+## Quick Start and Installation:
+ * Install Rust, if not already installed.  
    Instructions:  https://www.rust-lang.org/tools/install
  * Type:  rustup update
  * Change to the directory where you want this program to live.

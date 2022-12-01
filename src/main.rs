@@ -9,14 +9,15 @@
 // Revisions:
 // ----------
 // 2022-11-17:  Initial version.  (No zooming capabilities.)
-// 2022-11-18:  Added threshold to escape_value() function.
+// 2022-11-18:  Added threshold to calculate_escape_value() function.
 // 2022-11-18:  Added ability to zoom in and out.
-// 2022-11-19:  Drawing the set now happens from the center -> out.
-//              (Instead of from top to bottom.)
+// 2022-11-19:  Drawing the set now happens from the center -> out,
+//              instead of from top to bottom.
 // 2022-11-21:  Added ability to save a screenshot of current image.
 // 2022-11-23:  Added the ability to specify window size with --size=NUMBER.
-// 2022-11-28:  Added a --bailout=NUMBER switch.
+// 2022-11-28:  Added the --bailout=NUMBER switch.
 // 2022-11-30:  Added printing of coordinates (to stdout) with the C key.
+// 2022-12-01:  Added the --julia=X,Y switch.
 // ----------
 
 
@@ -160,16 +161,23 @@ fn next_pixel_coordinate_with_offset(row: isize, column: isize,
 // of iterations needed to determine that the coordinate
 // is not part of the Mandelbrot set (or None if it is
 // part of the set).
-fn calculate_escape_value(x: f64, y: f64, threshold: Option<f64>, bailout: Option<usize>) -> Option<usize> {
-    let x0 = x;
-    let y0 = y;
+//
+// Note:  Using a value of None for c will make it be
+//        set to the passed-in (x,y), which is ideal
+//        for calculating the Mandelbrot set.
+//        For Julia sets, where c is the same for
+//        each and every coordinate, c can be passed
+//        in as Some((some_x as f64, some_y as f64)).
+fn calculate_escape_value(x: f64, y: f64,
+                          c: Option<(f64, f64)>,
+                          threshold: Option<f64>,
+                          bailout: Option<usize>) -> Option<usize> {
+    let (c_x, c_y) = c.unwrap_or((x, y));
     let threshold = threshold.unwrap_or(0.0);
 
     let mut iterations = 0;
-    let mut x_slow = x;
-    let mut y_slow = y;
-    let mut x_fast = x;
-    let mut y_fast = y;
+    let (mut x_slow, mut y_slow) = (x, y);
+    let (mut x_fast, mut y_fast) = (x, y);
 
     let _start_of_loop = std::time::Instant::now();
 
@@ -186,7 +194,7 @@ fn calculate_escape_value(x: f64, y: f64, threshold: Option<f64>, bailout: Optio
         }
         let difference_of_squares = x_squared - y_squared;
         let double_the_product = 2.0 * x_fast * y_fast;
-        (x_fast, y_fast) = (difference_of_squares + x0, double_the_product + y0);
+        (x_fast, y_fast) = (difference_of_squares + c_x, double_the_product + c_y);
         // Check to see if we've encountered this point before:
         if threshold == 0.0 {  // (if no threshold was specified)
             if (x_fast, y_fast) == (x_slow, y_slow) {
@@ -210,7 +218,7 @@ fn calculate_escape_value(x: f64, y: f64, threshold: Option<f64>, bailout: Optio
         }
         let difference_of_squares = x_squared - y_squared;
         let double_the_product = 2.0 * x_fast * y_fast;
-        (x_fast, y_fast) = (difference_of_squares + x0, double_the_product + y0);
+        (x_fast, y_fast) = (difference_of_squares + c_x, double_the_product + c_y);
         // Check to see if we've encountered this point before:
         if threshold == 0.0 {  // (if no threshold was specified)
             if (x_fast, y_fast) == (x_slow, y_slow) {
@@ -231,7 +239,7 @@ fn calculate_escape_value(x: f64, y: f64, threshold: Option<f64>, bailout: Optio
         let (x_squared, y_squared) = (x_slow * x_slow, y_slow * y_slow);
         let difference_of_squares = x_squared - y_squared;
         let double_the_product = 2.0 * x_slow * y_slow;
-        (x_slow, y_slow) = (difference_of_squares + x0, double_the_product + y0);
+        (x_slow, y_slow) = (difference_of_squares + c_x, double_the_product + c_y);
         // Check to see if we've encountered this point before:
         if threshold == 0.0 {  // (if no threshold was specified)
             if (x_fast, y_fast) == (x_slow, y_slow) {
@@ -496,6 +504,7 @@ Example usages:
    jlr-mandelbrot
    jlr-mandelbrot --size=256
    jlr-mandelbrot --bailout=150
+   jlr-mandelbrot --julia=-0.835,-0.232
 
 Options:
    -h, --help
@@ -507,6 +516,9 @@ Options:
       Uses a bailout number, or a maximum number of iterations.
       If this number is reached, then a point is considered to
       be part of the set.  (A bailout number is not used by default.)
+   --julia=X,Y
+      Instead of a Mandelbrot set, a Julia set will be generated
+      using X+Yi as the value for c.
 
 Once the image is displayed:
    A left-click of the mouse zooms in.
@@ -528,12 +540,12 @@ e-mail:  {username}@{domain}.{suffix}
 fn test_calculate_escape_value_function() {
     println!();
     println!("Testing the calculate_escape_value() function:");
-    let (x, y) = (0.0, 0.0);  println!("{:?}: {:?}", (x, y), calculate_escape_value(x, y, None, None));
-    let (x, y) = (-1., 0.4);  println!("{:?}: {:?}", (x, y), calculate_escape_value(x, y, None, None));
-    let (x, y) = (0.25, 0.5);  println!("{:?}: {:?}", (x, y), calculate_escape_value(x, y, Some(0.001), None));
-    let (x, y) = (-1., 0.25);  println!("{:?}: {:?}", (x, y), calculate_escape_value(x, y, Some(0.001), None));
-    let (x, y) = (-1., -0.25);  println!("{:?}: {:?}", (x, y), calculate_escape_value(x, y, Some(0.001), None));
-    let (x, y) = (0.25, -0.5);  println!("{:?}: {:?}", (x, y), calculate_escape_value(x, y, Some(0.001), None));
+    let (x, y) = (0.0, 0.0);  println!("{:?}: {:?}", (x, y), calculate_escape_value(x, y, None, None, None));
+    let (x, y) = (-1., 0.4);  println!("{:?}: {:?}", (x, y), calculate_escape_value(x, y, None, None, None));
+    let (x, y) = (0.25, 0.5);  println!("{:?}: {:?}", (x, y), calculate_escape_value(x, y, None, Some(0.001), None));
+    let (x, y) = (-1., 0.25);  println!("{:?}: {:?}", (x, y), calculate_escape_value(x, y, None, Some(0.001), None));
+    let (x, y) = (-1., -0.25);  println!("{:?}: {:?}", (x, y), calculate_escape_value(x, y, None, Some(0.001), None));
+    let (x, y) = (0.25, -0.5);  println!("{:?}: {:?}", (x, y), calculate_escape_value(x, y, None, Some(0.001), None));
     println!();
 }
 
@@ -563,8 +575,14 @@ fn test_all() {
 
 
 fn main() {
+    // These are "practically global" variables, in that
+    // they're used (and sometimes changed) all throughout
+    // the main() function:
     let mut window_size_to_use: usize = DEFAULT_WINDOW_SIZE;
     let mut bailout_value_to_use: Option<usize> = None;
+    let mut c: Option<(f64, f64)> = None;  // Sometimes known as (x0, y0).
+    let mut original_center_to_use: (f64, f64) = (-0.5, 0.0);
+    let original_distance_from_center_to_edge: f64 = 1.725;
 
     // Parse command-line arguments:
     {
@@ -582,7 +600,8 @@ fn main() {
                 test_all();
                 return ()
             } else if still_looking_for_options && arg.starts_with("--size=") {
-                let size_text = &arg[7..];
+                let prefix_length = "--size=".len();
+                let size_text = &arg[prefix_length..];
                 window_size_to_use = match size_text.parse() {
                     Ok(size) => size,
                     _ => {
@@ -599,7 +618,8 @@ fn main() {
                 println!("        (Did you forget the \"=\" sign?)");
                 std::process::exit(1)
             } else if still_looking_for_options && arg.starts_with("--bailout=") {
-                let bailout_text = &arg[10..];
+                let prefix_length = "--bailout=".len();
+                let bailout_text = &arg[prefix_length..];
                 bailout_value_to_use = match bailout_text.parse() {
                     Ok(size) => Some(size),
                     _ => {
@@ -609,6 +629,31 @@ fn main() {
                 };
             } else if still_looking_for_options && arg == "--bailout" {
                 println!("Error:  The --bailout=NUMBER argument seems to be missing the \"=NUMBER\" part.");
+                println!("        (Did you forget the \"=\" sign?)");
+                std::process::exit(1)
+            } else if still_looking_for_options && arg.starts_with("--julia=") {
+                let prefix_length = "--julia=".len();
+                let julia_text = &arg[prefix_length..];
+                let text_values: Vec<_> = julia_text.split(",").collect();
+                if text_values.len() != 2 {
+                    println!("Error:  The X,Y value in --julia=X,Y ({julia_text}) needs exactly one comma.");
+                    std::process::exit(1)
+                }
+                let (x_text, y_text) = (text_values[0], text_values[1]);
+                let x_result = x_text.parse::<f64>();
+                if x_result.is_err() {
+                    println!("Error:  The X value in --julia=X,Y ({julia_text}) is not a valid number.");
+                    std::process::exit(1)
+                }
+                let y_result = y_text.parse::<f64>();
+                if y_result.is_err() {
+                    println!("Error:  The Y value in --julia=X,Y ({julia_text}) is not a valid number.");
+                    std::process::exit(1)
+                }
+                c = Some((x_result.unwrap(), y_result.unwrap()));
+                original_center_to_use = (0.0, 0.0);  // We'll start centered for Julia sets.
+            } else if still_looking_for_options && arg == "--julia" {
+                println!("Error:  The --julia=X,Y argument seems to be missing the \"=X,Y\" part.");
                 println!("        (Did you forget the \"=\" sign?)");
                 std::process::exit(1)
             } else if still_looking_for_options && arg.starts_with("--") {
@@ -660,10 +705,7 @@ fn main() {
 
     let mut image_buffer: Vec<u32> = vec![0u32; width * height];
 
-    // let (min_x, max_x) = (-2.0, 2.0);
-    // let (min_y, max_y) = (-2.0, 2.0);
-    let (original_center_x, original_center_y) = (-0.5, 0.0);
-    let original_distance_from_center_to_edge: f64 = 1.725;
+    let (original_center_x, original_center_y) = original_center_to_use;
 
     let mut info = WindowAndViewportInfo::new(
         width, height,  // (in pixels)
@@ -784,7 +826,7 @@ Mouse coordinates:  {}
             // Convert row & column into x & y:
             let (x, y) = convert_row_and_column_to_x_and_y(&info, row as f64, column as f64);
 
-            let escape_value = calculate_escape_value(x, y, Some(threshold), bailout_value_to_use);
+            let escape_value = calculate_escape_value(x, y, c, Some(threshold), bailout_value_to_use);
             let (r, g, b) = color(escape_value);
             let color_as_integer = rgb_to_u32(r, g, b);
 
