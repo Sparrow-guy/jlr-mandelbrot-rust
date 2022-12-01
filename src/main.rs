@@ -442,8 +442,8 @@ fn get_user_input(window: &minifb::Window,
                 window.get_mouse_down(minifb::MouseButton::Left),
                 window.get_mouse_down(minifb::MouseButton::Right));
 
-    if !window.is_open() || window.is_key_released(minifb::Key::Escape)
-                         || window.is_key_released(minifb::Key::Q) {
+    if !window.is_open() || window.is_key_down(minifb::Key::Escape)
+                         || window.is_key_down(minifb::Key::Q) {
         return UserInput::Quit
     } else if window.is_key_released(minifb::Key::S) {  // S => Save ScreenShot
         return UserInput::SaveScreenShot
@@ -637,6 +637,7 @@ fn main() {
     println!(" * Left-click to zoom in.");
     println!(" * Right-click to zoom out.");
     println!(" * Press S to save a screenshot.");
+    println!(" * Press C to print coordinates (to this console).");
     println!(" * Press the Q key or the Escape key to quit/exit the program.");
     println!();
     println!("For additional help, run this program with the --help switch.");
