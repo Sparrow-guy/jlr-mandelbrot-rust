@@ -16,11 +16,12 @@
 // 2022-11-21:  Added ability to save a screenshot of current image.
 // 2022-11-23:  Added the ability to specify window size with --size=NUMBER.
 // 2022-11-28:  Added a --bailout=NUMBER switch.
+// 2022-11-30:  Added printing of coordinates (to stdout) with the C key.
 // ----------
 
 
 /*///////////////////////////////////////////////////////////////////
-NOTE:  This program uses several crates in its code, so to compile
+NOTE:  This program uses several crates, so to compile
        this program you need to place the following lines:
 
 chrono = "0.4.23"
@@ -287,7 +288,7 @@ impl WindowAndViewportInfo {
     fn new(width: usize, height: usize,  // (in pixels)
            center_x: f64, center_y: f64, distance_from_center_to_edge: f64,
            zoom_level: isize)
-               -> WindowAndViewportInfo {
+               -> Self {
 
         let span = distance_from_center_to_edge * 2.0;
         let min_x = center_x - distance_from_center_to_edge;
@@ -297,7 +298,7 @@ impl WindowAndViewportInfo {
         let delta_x = (max_x - min_x) / width as f64;
         let delta_y = (max_y - min_y) / height as f64;
 
-        WindowAndViewportInfo {
+        Self {
             width,
             height,
             center_x,
@@ -338,8 +339,8 @@ struct MouseInfo {
 }
 #[allow(dead_code)]  // (There are methods that aren't called here, but may be in the future.)
 impl MouseInfo {
-    fn new() -> MouseInfo {
-        MouseInfo {
+    fn new() -> Self {
+        Self {
             left_mouse_button_pressed: [false, false],
             right_mouse_button_pressed: [false, false],
         }
@@ -387,14 +388,17 @@ impl MouseInfo {
 }
 
 
+// Converts a row&column coordinate (with row=0 & column=0 as the center
+// of upper-right pixel) to the Mandelbrot's domain's x,y coordinate:
 fn convert_row_and_column_to_x_and_y(info: &WindowAndViewportInfo,
-                                     row: isize, column: isize) -> (f64, f64) {
-    let x = info.min_x + info.delta_x * (column as f64 + 0.5);
-    let y = info.max_y - info.delta_y * (row as f64 + 0.5);
+                                     row: f64, column: f64) -> (f64, f64) {
+    let x = info.min_x + info.delta_x * (column + 0.5);
+    let y = info.max_y - info.delta_y * (row + 0.5);
     (x, y)
 }
 
 
+// Saves a screenshot to disk with the given filename:
 fn save_screenshot(filename: &str, width: usize, height: usize, image_buffer: &Vec<u32>) -> () {
     assert!(image_buffer.len() == width * height);
 
@@ -422,6 +426,7 @@ enum UserInput {
     Nothing,
     Quit,
     SaveScreenShot,
+    ShowCoordinates,
     ZoomIn(f64, f64),  // (x, y) of the new center.  (Where the user clicked.)
     ZoomOut(f64, f64),  // (x, y) of the new center.  (NOT where the user clicked!)
 }
@@ -437,22 +442,24 @@ fn get_user_input(window: &minifb::Window,
                 window.get_mouse_down(minifb::MouseButton::Left),
                 window.get_mouse_down(minifb::MouseButton::Right));
 
-    if !window.is_open() || window.is_key_down(minifb::Key::Escape)
-                         || window.is_key_down(minifb::Key::Q) {
+    if !window.is_open() || window.is_key_released(minifb::Key::Escape)
+                         || window.is_key_released(minifb::Key::Q) {
         return UserInput::Quit
-    } else if window.is_key_released(minifb::Key::S) {
+    } else if window.is_key_released(minifb::Key::S) {  // S => Save ScreenShot
         return UserInput::SaveScreenShot
+    } else if window.is_key_released(minifb::Key::C) {  // C => Coordinates
+        return UserInput::ShowCoordinates
     } else if mouse_info.left_mouse_button_just_released() {  // (Left mouse button WAS down, but no longer.)
         let (column, row) = window.get_mouse_pos(minifb::MouseMode::Pass).unwrap();
         let row = row as isize;  // (Convert to integer.)
         let column = column as isize;  // (Convert to integer.)
-        let (x, y) = convert_row_and_column_to_x_and_y(&info, row, column);
+        let (x, y) = convert_row_and_column_to_x_and_y(&info, row as f64, column as f64);
         return UserInput::ZoomIn(x, y)
     } else if mouse_info.right_mouse_button_just_released() {  // (Right mouse button WAS down, but no longer.)
         let (column, row) = window.get_mouse_pos(minifb::MouseMode::Pass).unwrap();
         let row = row as isize;  // (Convert to integer.)
         let column = column as isize;  // (Convert to integer.)
-        let (x, y) = convert_row_and_column_to_x_and_y(&info, row, column);
+        let (x, y) = convert_row_and_column_to_x_and_y(&info, row as f64, column as f64);
         return UserInput::ZoomOut(2.0 * info.center_x - x, 2.0 * info.center_y - y)
     }
 
@@ -504,6 +511,7 @@ Options:
 Once the image is displayed:
    A left-click of the mouse zooms in.
    A right-click of the mouse zooms out.
+   Pressing the C key will print coordinates to the console.
    Pressing the S key will save a screenshot in PNG format.
    Pressing the Q key will quit.
    Pressing the Escape key will also quit.
@@ -694,17 +702,47 @@ fn main() {
                 let filename = now.format("jlr-mandelbrot.screenshot.%Y%m%d.%H%M%S.%3f.png").to_string();
                 save_screenshot(&filename, info.width, info.height, &image_buffer)
             }
+            UserInput::ShowCoordinates => {
+                // We'll use f32 values instead of f64, as f64 values
+                // have too many digits of precision, and take up too
+                // much of the line:
+                let upper_left = (info.min_x as f32, info.max_y as f32);
+                let upper_right = (info.max_x as f32, info.max_y as f32);
+                let center = (info.center_x as f32, info.center_y as f32);
+                let lower_left = (info.min_x as f32, info.min_y as f32);
+                let lower_right = (info.max_x as f32, info.min_y as f32);
+                let (mouse_column, mouse_row) = window.get_mouse_pos(minifb::MouseMode::Pass).unwrap();
+                let mouse_cursor = convert_row_and_column_to_x_and_y(&info, mouse_row as f64, mouse_column as f64);
+                let mouse_cursor = (mouse_cursor.0 as f32, mouse_cursor.1 as f32);
+                print!("Screen coordinates:
+--------------------------------------------------------------
+|{: <30}{: >30}|
+|{: ^60}|
+|{: <30}{: >30}|
+--------------------------------------------------------------
+Mouse coordinates:  {}
+",
+    format!("{:?}", upper_left),
+    format!("{:?}", upper_right),
+    format!("{:?}", center),
+    format!("{:?}", lower_left),
+    format!("{:?}", lower_right),
+    format!("{:?}", mouse_cursor));
+            }
             _ => ()
         }
 
         if done {
             // Limit to max ~60 fps update rate:
             window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
+
+            // Refresh the screen and get window inputs:
             window.update_with_buffer(&image_buffer, info.width, info.height).unwrap();
+
+            // Examine the window to determine the user's input:
             user_input = get_user_input(&window, &info, &mut mouse_info);
-            continue;
-        } else {
-            window.limit_update_rate(None);
+
+            continue;  // Since we're done drawing the frame, don't draw it again.
         }
 
 
@@ -743,7 +781,7 @@ fn main() {
             }
             let (row, column) = (current_row as usize, current_column as usize);
             // Convert row & column into x & y:
-            let (x, y) = convert_row_and_column_to_x_and_y(&info, row as isize, column as isize);
+            let (x, y) = convert_row_and_column_to_x_and_y(&info, row as f64, column as f64);
 
             let escape_value = calculate_escape_value(x, y, Some(threshold), bailout_value_to_use);
             let (r, g, b) = color(escape_value);
