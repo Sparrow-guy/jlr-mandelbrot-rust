@@ -82,7 +82,7 @@ fn color(i: Option<usize>) -> (u8, u8, u8) {
         1 => (0, value1, value2),
         2 => (value2, 0, value1),
         // Should never get here, but include just in case:
-        _ => { assert!(false); (0, 0, 0) }
+        _ => panic!("Reached state that should never have been reached."),
     }
 }
 
@@ -94,66 +94,76 @@ fn rgb_to_u32(r: u8, g: u8, b: u8) -> u32 {
 }
 
 
-// Given a pixel coordinate, this will return the next
-// pixel in a (straight-line) spiral that spirals outward.
-fn next_pixel_coordinate(row: isize, column: isize) -> (isize, isize) {
-    if (row, column) == (0, 0) {
-        return (0, 1)  // Go right.
-    }
-
-    // In case you're wondering, I figured out the following
-    // logic by drawing a straight-line spiral on grid paper.
-    // No way I could have done it in my head!
-
-    if row == column {
-        if column > 0 {
-            return (row, column + 1)  // Go right.
-        } else {
-            return (row + 1, column)  // Go down.
+// This structure is an iterator that returns pixel coordinates
+// (row, column) starting at the specified (start_row, start_column)
+// and continuing outward in a swirl.  Its iterator should never
+// return None.
+struct RowAndColumnIterator {
+    started: bool,
+    start_row: isize,
+    start_column: isize,
+    row: isize,
+    column: isize,
+}
+impl RowAndColumnIterator {
+    fn new(start_row: isize, start_column: isize) -> Self {
+        Self {
+            started: false,
+            start_row: start_row,
+            start_column: start_column,
+            row: 0,
+            column: 0,
         }
     }
+}
+impl Iterator for RowAndColumnIterator {
+    // We will returning (row, column) tuples (wrappen in Some()):
+    type Item = (isize, isize);
 
-    if row == -column {
-        if column > 0 {
-            return (row, column - 1)  // Go left.
+    fn next(&mut self) -> Option<Self::Item> {
+        if !self.started {
+            (self.row, self.column) = (0, 0);
+            self.started = true;
         } else {
-            return (row, column + 1)  // Go right.
+            let (row, column) = (&mut self.row, &mut self.column);
+            // The variables row and column are now references
+            // to self.row and self.column.
+
+            // In case you're wondering, I figured out the following
+            // logic by drawing a straight-line spiral on grid paper.
+            // No way I could have done it in my head!
+
+            if (*row, *column) == (0, 0) {
+                (*row, *column) = (0, 1)  // Go right.
+            } else if *row == *column {
+                if *column > 0 {
+                    (*row, *column) = (*row, *column + 1)  // Go right.
+                } else {
+                    (*row, *column) = (*row + 1, *column)  // Go down.
+                }
+            } else if *row == -*column {
+                if *column > 0 {
+                    (*row, *column) = (*row, *column - 1)  // Go left.
+                } else {
+                    (*row, *column) = (*row, *column + 1)  // Go right.
+                }
+            } else if *column > 0 && *column > row.abs() {
+                (*row, *column) = (*row - 1, *column)  // Go up.
+            } else if *column < 0 && -*column > row.abs() {
+                (*row, *column) = (*row + 1, *column)  // Go down.
+            } else if *row > 0 && *row > column.abs() {
+                (*row, *column) = (*row, *column + 1)  // Go right.
+            } else if *row < 0 && -*row > column.abs() {
+                (*row, *column) = (*row, *column - 1)  // Go left.
+            } else {
+                panic!("Reached state that should never have been reached.");
+            }
         }
-    }
 
-    if column > 0 && column > row.abs() {
-        return (row - 1, column)  // Go up.
+        Some((self.row + self.start_row, self.column + self.start_column))
     }
-
-    if column < 0 && -column > row.abs() {
-        return (row + 1, column)  // Go down.
-    }
-
-    if row > 0 && row > column.abs() {
-        return (row, column + 1)  // Go right.
-    }
-
-    if row < 0 && -row > column.abs() {
-        return (row, column - 1)  // Go left.
-    }
-
-    dbg!("Bad row,column value:  {},{}", row, column);
-    assert!(false);  // Should never get here, but include just in case.
-    (0, 0)
 }
 
-
-// This is just like the fucntion next_pixel_coordinate(),
-// except that it doesn't start at (0, 0), but rather at
-// (center_row, center_column) -- so we can spiral around
-// any arbitrary point we want.
-fn next_pixel_coordinate_with_offset(row: isize, column: isize,
-                                     center_row: usize, center_column: usize)
-    -> (isize, isize) {
-    let (row_to_use, column_to_use) = (row - center_row as isize, column - center_column as isize);
-    let (returned_row, returned_column) = next_pixel_coordinate(row_to_use, column_to_use);
-    return (returned_row + center_row as isize, returned_column + center_column as isize);
-}
 
 
 // The main Mandelbrot set calculation function.
@@ -168,6 +178,15 @@ fn next_pixel_coordinate_with_offset(row: isize, column: isize,
 //        For Julia sets, where c is the same for
 //        each and every coordinate, c can be passed
 //        in as Some((some_x as f64, some_y as f64)).
+//
+// The threshold specifies what's considered "close enough"
+// for x and y values when detecting cycles.  (Half the
+// length of a pixel is probably good enough.)
+//
+// The bailout value is the maximum number of times
+// Znext = Z + c
+// gets carried out (not counting the times for
+// cycle detection).
 fn calculate_escape_value(x: f64, y: f64,
                           c: Option<(f64, f64)>,
                           threshold: Option<f64>,
@@ -406,8 +425,12 @@ fn convert_row_and_column_to_x_and_y(info: &WindowAndViewportInfo,
 }
 
 
-// Saves a screenshot to disk with the given filename:
+// Saves a screenshot to disk with the given filename.
+// (The image_buffer must be length of width x height.)
 fn save_screenshot(filename: &str, width: usize, height: usize, image_buffer: &Vec<u32>) -> () {
+    // Verify that the length of the image_buffer
+    // equals the width x height.  Otherwise, things
+    // will break spectacularly:
     assert!(image_buffer.len() == width * height);
 
     let mut screenshot_buffer = image::ImageBuffer::new(width as u32, height as u32);
@@ -551,12 +574,12 @@ fn test_calculate_escape_value_function() {
 
 
 #[allow(dead_code)]
-fn test_next_pixel_coordinate_function() {
+fn test_row_and_column_iterator() {
     println!();
-    println!("Testing the next_pixel_coordinate() function:");
-    let (mut row, mut column) = (0, 0);  println!("{:?}", (column, row));
+    println!("Testing the RowAndColumnIterator:");
+    let mut row_and_column_iterator = RowAndColumnIterator::new(0, 0);
     for _ in 0..50 {
-        (row, column) = next_pixel_coordinate(row, column);  println!("{:?}", (column, row));
+        println!("{:?}", row_and_column_iterator.next().unwrap());
     }
     println!();
 }
@@ -569,7 +592,7 @@ fn test_all() {
     println!();
     test_calculate_escape_value_function();
     println!();
-    test_next_pixel_coordinate_function();
+    test_row_and_column_iterator();
     println!();
 }
 
@@ -810,41 +833,51 @@ Mouse coordinates:  {}
         let start_time = std::time::Instant::now();
         let mut last_update_time = std::time::Instant::now();
 
+        // Create an iterator that will return pixel coordinates,
+        // swirling outward from the center of the window:
         let (half_width, half_height) = (info.width / 2, info.height / 2);  // (in pixels)
-        let (mut current_row, mut current_column) = (half_width as isize, half_height as isize);  // (in pixels)
+        let mut row_and_column_iterator = RowAndColumnIterator::new(half_width as isize,
+                                                                    half_height as isize);
 
-        for num_pixel in 0..(info.width * info.height) {
-            if num_pixel == 0 {
-                (current_row, current_column) = (half_width as isize, half_height as isize);
-            } else {
-                loop {
-                    (current_row, current_column)
-                        = next_pixel_coordinate_with_offset(current_row, current_column,
-                                                            half_width, half_height);
-                    if current_row < 0 {
-                        continue  // (Out of bounds, so try again.)
-                    } else if current_column < 0 {
-                        continue  // (Out of bounds, so try again.)
-                    } else if current_row >= info.height as isize {
-                        continue  // (Out of bounds, so try again.)
-                    } else if  current_column >= info.width as isize {
-                        continue  // (Out of bounds, so try again.)
-                    } else {
-                        break  // (Success!  We can keep this value.)
-                    }
+        // Fill out every pixel in the image_buffer:
+        for _ in 0..(info.width * info.height) {
+            let (mut current_row, mut current_column);  // (in pixels)
+            loop {
+                (current_row, current_column)
+                    = row_and_column_iterator.next().unwrap();
+                // Check to see if the (current_row, current_column)
+                // pixel coordinate is in the window.  If not, keep
+                // looping until we find one that is in the window:
+                if current_row < 0 {
+                    continue  // (Out of bounds, so try again.)
+                } else if current_column < 0 {
+                    continue  // (Out of bounds, so try again.)
+                } else if current_row >= info.height as isize {
+                    continue  // (Out of bounds, so try again.)
+                } else if  current_column >= info.width as isize {
+                    continue  // (Out of bounds, so try again.)
+                } else {
+                    break  // (Success!  We can keep this value.)
                 }
             }
             let (row, column) = (current_row as usize, current_column as usize);
             // Convert row & column into x & y:
             let (x, y) = convert_row_and_column_to_x_and_y(&info, row as f64, column as f64);
 
+            // Is (x, y) part of the set?  Let's find out.
+            // And whatever the answer, find the color to
+            // plot at the pixel's row & column of the
+            // image_buffer:
             let escape_value = calculate_escape_value(x, y, c, Some(threshold), bailout_value_to_use);
             let (r, g, b) = color(escape_value);
             let color_as_integer = rgb_to_u32(r, g, b);
 
+            // Set the pixel (at the row & column) of the
+            // image_buffer to the color we just calculated:
             let i = row * info.width + column;
             image_buffer[i] = color_as_integer;
 
+            // Periodically refresh the image and get user input:
             if last_update_time.elapsed().as_millis() >= 1 {
                 window.update_with_buffer(&image_buffer, info.width, info.height).unwrap();
                 last_update_time = std::time::Instant::now();
