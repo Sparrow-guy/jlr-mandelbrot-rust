@@ -746,17 +746,29 @@ fn main() {
                 save_screenshot(&filename, info.width, info.height, &image_buffer)
             }
             UserInput::ShowCoordinates => {
-                // We'll use f32 values instead of f64, as f64 values
-                // have too many digits of precision, and take up too
-                // much of the line:
-                let upper_left = (info.min_x as f32, info.max_y as f32);
-                let upper_right = (info.max_x as f32, info.max_y as f32);
-                let center = (info.center_x as f32, info.center_y as f32);
-                let lower_left = (info.min_x as f32, info.min_y as f32);
-                let lower_right = (info.max_x as f32, info.min_y as f32);
+                let upper_left = (info.min_x, info.max_y);
+                let upper_right = (info.max_x, info.max_y);
+                let center = (info.center_x, info.center_y);
+                let lower_left = (info.min_x, info.min_y);
+                let lower_right = (info.max_x, info.min_y);
                 let (mouse_column, mouse_row) = window.get_mouse_pos(minifb::MouseMode::Pass).unwrap();
-                let mouse_cursor = convert_row_and_column_to_x_and_y(&info, mouse_row as f64, mouse_column as f64);
-                let mouse_cursor = (mouse_cursor.0 as f32, mouse_cursor.1 as f32);
+                let mouse_cursor = convert_row_and_column_to_x_and_y(
+                                       &info,
+                                       mouse_row as f64, mouse_column as f64);
+                let mouse_cursor = (mouse_cursor.0, mouse_cursor.1);
+                // We want to round the numbers to use only a specified
+                // number of digits of precision, so that they don't take
+                // up too much of the line:
+                let round_tuple_of_floats = |p: (f64, f64), decimal_places: isize| -> (f64, f64) {
+                    let p0 = p.0 * (10.0 as f64).powi(decimal_places as i32);
+                    let p0 = p0.round();
+                    let p0 = p0 / (10.0 as f64).powi(decimal_places as i32);
+                    let p1 = p.1 * (10.0 as f64).powi(decimal_places as i32);
+                    let p1 = p1.round();
+                    let p1 = p1 / (10.0 as f64).powi(decimal_places as i32);
+                    (p0, p1)
+                };
+                let decimal_places = 7;
                 print!("Screen coordinates:
 --------------------------------------------------------------
 |{: <30}{: >30}|
@@ -765,12 +777,12 @@ fn main() {
 --------------------------------------------------------------
 Mouse coordinates:  {}
 ",
-    format!("{:?}", upper_left),
-    format!("{:?}", upper_right),
-    format!("{:?}", center),
-    format!("{:?}", lower_left),
-    format!("{:?}", lower_right),
-    format!("{:?}", mouse_cursor));
+    format!("{:?}", round_tuple_of_floats(upper_left, decimal_places)),
+    format!("{:?}", round_tuple_of_floats(upper_right, decimal_places)),
+    format!("{:?}", round_tuple_of_floats(center, decimal_places)),
+    format!("{:?}", round_tuple_of_floats(lower_left, decimal_places)),
+    format!("{:?}", round_tuple_of_floats(lower_right, decimal_places)),
+    format!("{:?}", round_tuple_of_floats(mouse_cursor, decimal_places)));
             }
             _ => ()
         }
