@@ -40,6 +40,14 @@ minifb = "0.23"
 // #![allow(unused_variables)]
 
 
+// The Float type defines the type of floating-point values
+// to use when calculating the fractal.  It should really
+// be set to the biggest float type available (which is
+// f64 today, but might be f128 tomorrow).  But if you're
+// curious, you can change it to f32 for comparison purposes.
+type Float = f64;
+
+
 // The default width and height of the display window in pixels:
 const DEFAULT_WINDOW_SIZE: usize = 512;
 
@@ -177,7 +185,7 @@ impl Iterator for RowAndColumnIterator {
 //        for calculating the Mandelbrot set.
 //        For Julia sets, where c is the same for
 //        each and every coordinate, c can be passed
-//        in as Some((some_x as f64, some_y as f64)).
+//        in as Some((some_x as Float, some_y as Float)).
 //
 // The threshold specifies what's considered "close enough"
 // for x and y values when detecting cycles.  (Half the
@@ -187,9 +195,9 @@ impl Iterator for RowAndColumnIterator {
 // Znext = Z + c
 // gets carried out (not counting the times for
 // cycle detection).
-fn calculate_escape_value(x: f64, y: f64,
-                          c: Option<(f64, f64)>,
-                          threshold: Option<f64>,
+fn calculate_escape_value(x: Float, y: Float,
+                          c: Option<(Float, Float)>,
+                          threshold: Option<Float>,
                           bailout: Option<usize>) -> Option<usize> {
     let (c_x, c_y) = c.unwrap_or((x, y));
     let threshold = threshold.unwrap_or(0.0);
@@ -299,21 +307,21 @@ fn calculate_escape_value(x: f64, y: f64,
 struct WindowAndViewportInfo {
     width: usize,  // (in pixels)
     height: usize,  // (in pixels)
-    center_x: f64,
-    center_y: f64,
-    span: f64,
-    distance_from_center_to_edge: f64,  // (half of the span)
-    min_x: f64,
-    max_x: f64,
-    min_y: f64,
-    max_y: f64,
-    delta_x: f64,
-    delta_y: f64,
+    center_x: Float,
+    center_y: Float,
+    span: Float,
+    distance_from_center_to_edge: Float,  // (half of the span)
+    min_x: Float,
+    max_x: Float,
+    min_y: Float,
+    max_y: Float,
+    delta_x: Float,
+    delta_y: Float,
     zoom_level: isize,
 }
 impl WindowAndViewportInfo {
     fn new(width: usize, height: usize,  // (in pixels)
-           center_x: f64, center_y: f64, distance_from_center_to_edge: f64,
+           center_x: Float, center_y: Float, distance_from_center_to_edge: Float,
            zoom_level: isize)
                -> Self {
 
@@ -322,8 +330,8 @@ impl WindowAndViewportInfo {
         let max_x = center_x + distance_from_center_to_edge;
         let min_y = center_y - distance_from_center_to_edge;
         let max_y = center_y + distance_from_center_to_edge;
-        let delta_x = (max_x - min_x) / width as f64;
-        let delta_y = (max_y - min_y) / height as f64;
+        let delta_x = (max_x - min_x) / width as Float;
+        let delta_y = (max_y - min_y) / height as Float;
 
         Self {
             width,
@@ -418,7 +426,7 @@ impl MouseInfo {
 // Converts a row&column coordinate (with row=0 & column=0 as the center
 // of upper-right pixel) to the Mandelbrot's domain's x,y coordinate:
 fn convert_row_and_column_to_x_and_y(info: &WindowAndViewportInfo,
-                                     row: f64, column: f64) -> (f64, f64) {
+                                     row: Float, column: Float) -> (Float, Float) {
     let x = info.min_x + info.delta_x * (column + 0.5);
     let y = info.max_y - info.delta_y * (row + 0.5);
     (x, y)
@@ -458,8 +466,8 @@ enum UserInput {
     Quit,
     SaveScreenShot,
     ShowCoordinates,
-    ZoomIn(f64, f64),  // (x, y) of the new center.  (Where the user clicked.)
-    ZoomOut(f64, f64),  // (x, y) of the new center.  (NOT where the user clicked!)
+    ZoomIn(Float, Float),  // (x, y) of the new center.  (Where the user clicked.)
+    ZoomOut(Float, Float),  // (x, y) of the new center.  (NOT where the user clicked!)
 }
 
 
@@ -484,13 +492,13 @@ fn get_user_input(window: &minifb::Window,
         let (column, row) = window.get_mouse_pos(minifb::MouseMode::Pass).unwrap();
         let row = row as isize;  // (Convert to integer.)
         let column = column as isize;  // (Convert to integer.)
-        let (x, y) = convert_row_and_column_to_x_and_y(&info, row as f64, column as f64);
+        let (x, y) = convert_row_and_column_to_x_and_y(&info, row as Float, column as Float);
         return UserInput::ZoomIn(x, y)
     } else if mouse_info.right_mouse_button_just_released() {  // (Right mouse button WAS down, but no longer.)
         let (column, row) = window.get_mouse_pos(minifb::MouseMode::Pass).unwrap();
         let row = row as isize;  // (Convert to integer.)
         let column = column as isize;  // (Convert to integer.)
-        let (x, y) = convert_row_and_column_to_x_and_y(&info, row as f64, column as f64);
+        let (x, y) = convert_row_and_column_to_x_and_y(&info, row as Float, column as Float);
         return UserInput::ZoomOut(2.0 * info.center_x - x, 2.0 * info.center_y - y)
     }
 
@@ -603,9 +611,9 @@ fn main() {
     // the main() function:
     let mut window_size_to_use: usize = DEFAULT_WINDOW_SIZE;
     let mut bailout_value_to_use: Option<usize> = None;
-    let mut c: Option<(f64, f64)> = None;  // Sometimes known as (x0, y0).
-    let mut original_center_to_use: (f64, f64) = (-0.5, 0.0);
-    let original_distance_from_center_to_edge: f64 = 1.725;
+    let mut c: Option<(Float, Float)> = None;  // Sometimes known as (x0, y0).
+    let mut original_center_to_use: (Float, Float) = (-0.5, 0.0);
+    let original_distance_from_center_to_edge: Float = 1.725;
 
     // Parse command-line arguments:
     {
@@ -663,12 +671,12 @@ fn main() {
                     std::process::exit(1)
                 }
                 let (x_text, y_text) = (text_values[0], text_values[1]);
-                let x_result = x_text.parse::<f64>();
+                let x_result = x_text.parse::<Float>();
                 if x_result.is_err() {
                     println!("Error:  The X value in --julia=X,Y ({julia_text}) is not a valid number.");
                     std::process::exit(1)
                 }
-                let y_result = y_text.parse::<f64>();
+                let y_result = y_text.parse::<Float>();
                 if y_result.is_err() {
                     println!("Error:  The Y value in --julia=X,Y ({julia_text}) is not a valid number.");
                     std::process::exit(1)
@@ -777,26 +785,26 @@ fn main() {
                 let (mouse_column, mouse_row) = window.get_mouse_pos(minifb::MouseMode::Pass).unwrap();
                 let mouse_cursor = convert_row_and_column_to_x_and_y(
                                        &info,
-                                       mouse_row as f64, mouse_column as f64);
+                                       mouse_row as Float, mouse_column as Float);
                 let mouse_cursor = (mouse_cursor.0, mouse_cursor.1);
                 // We want to round the numbers to use only a specified
                 // number of digits of precision, so that they don't take
                 // up too much of the line:
-                let round_tuple_of_floats = |p: (f64, f64), decimal_places: isize| -> (f64, f64) {
-                    let p0 = p.0 * (10.0 as f64).powi(decimal_places as i32);
+                let round_tuple_of_floats = |p: (Float, Float), decimal_places: isize| -> (Float, Float) {
+                    let p0 = p.0 * (10.0 as Float).powi(decimal_places as i32);
                     let p0 = p0.round();
-                    let p0 = p0 / (10.0 as f64).powi(decimal_places as i32);
-                    let p1 = p.1 * (10.0 as f64).powi(decimal_places as i32);
+                    let p0 = p0 / (10.0 as Float).powi(decimal_places as i32);
+                    let p1 = p.1 * (10.0 as Float).powi(decimal_places as i32);
                     let p1 = p1.round();
-                    let p1 = p1 / (10.0 as f64).powi(decimal_places as i32);
+                    let p1 = p1 / (10.0 as Float).powi(decimal_places as i32);
                     (p0, p1)
                 };
                 let decimal_places = 7;
                 print!("Screen coordinates:
 --------------------------------------------------------------
-|{: <30}{: >30}|
+|{: <29}  {: >29}|
 |{: ^60}|
-|{: <30}{: >30}|
+|{: <29}  {: >29}|
 --------------------------------------------------------------
 Mouse coordinates:  {}
 ",
@@ -862,7 +870,7 @@ Mouse coordinates:  {}
             }
             let (row, column) = (current_row as usize, current_column as usize);
             // Convert row & column into x & y:
-            let (x, y) = convert_row_and_column_to_x_and_y(&info, row as f64, column as f64);
+            let (x, y) = convert_row_and_column_to_x_and_y(&info, row as Float, column as Float);
 
             // Is (x, y) part of the set?  Let's find out.
             // And whatever the answer, find the color to
@@ -893,7 +901,7 @@ Mouse coordinates:  {}
         done = true;
         println!("Zoom level {}:  Elapsed time:  {} sec.",
                  info.zoom_level,
-                 start_time.elapsed().as_micros() as f64 / 1e6);
+                 start_time.elapsed().as_micros() as Float / 1e6);
     }  // (End of 'main_event_loop.)
 }
 
