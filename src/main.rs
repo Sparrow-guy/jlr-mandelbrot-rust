@@ -849,10 +849,10 @@ Mouse coordinates:  {}
 
         // Fill out every pixel in the image_buffer:
         for _ in 0..(info.width * info.height) {
-            let (mut current_row, mut current_column);  // (in pixels)
-            loop {
-                (current_row, current_column)
-                    = row_and_column_iterator.next().unwrap();
+            // Find the coordinate (as (row, column))
+            // of the next pixel to operate on:
+            let (row, column): (usize, usize) = loop {
+                let (current_row, current_column) = row_and_column_iterator.next().unwrap();
                 // Check to see if the (current_row, current_column)
                 // pixel coordinate is in the window.  If not, keep
                 // looping until we find one that is in the window:
@@ -864,11 +864,10 @@ Mouse coordinates:  {}
                     continue  // (Out of bounds, so try again.)
                 } else if  current_column >= info.width as isize {
                     continue  // (Out of bounds, so try again.)
-                } else {
-                    break  // (Success!  We can keep this value.)
+                } else {  // (Success!  We can keep this value.)
+                    break (current_row.try_into().unwrap(), current_column.try_into().unwrap())
                 }
-            }
-            let (row, column) = (current_row as usize, current_column as usize);
+            };
             // Convert row & column into x & y:
             let (x, y) = convert_row_and_column_to_x_and_y(&info, row as Float, column as Float);
 
