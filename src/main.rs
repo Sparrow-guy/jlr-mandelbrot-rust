@@ -65,7 +65,7 @@ fn color(i: Option<usize>) -> (u8, u8, u8) {
 
     const MANDELBROT_SET_COLOR: (u8, u8, u8) = (0, 0, 102);  // (dark blue)
     if i == None {
-        return MANDELBROT_SET_COLOR;
+        return MANDELBROT_SET_COLOR
     }
 
     let i = i.unwrap();
@@ -125,7 +125,7 @@ impl RowAndColumnIterator {
     }
 }
 impl Iterator for RowAndColumnIterator {
-    // We will returning (row, column) tuples (wrappen in Some()):
+    // We will be returning (row, column) tuples (wrappen in Some()):
     type Item = (isize, isize);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -142,27 +142,27 @@ impl Iterator for RowAndColumnIterator {
             // No way I could have done it in my head!
 
             if (*row, *column) == (0, 0) {
-                (*row, *column) = (0, 1)  // Go right.
+                (*row, *column) = (0, 1);  // Go right.
             } else if *row == *column {
                 if *column > 0 {
-                    (*row, *column) = (*row, *column + 1)  // Go right.
+                    (*row, *column) = (*row, *column + 1);  // Go right.
                 } else {
-                    (*row, *column) = (*row + 1, *column)  // Go down.
+                    (*row, *column) = (*row + 1, *column);  // Go down.
                 }
             } else if *row == -*column {
                 if *column > 0 {
-                    (*row, *column) = (*row, *column - 1)  // Go left.
+                    (*row, *column) = (*row, *column - 1);  // Go left.
                 } else {
-                    (*row, *column) = (*row, *column + 1)  // Go right.
+                    (*row, *column) = (*row, *column + 1);  // Go right.
                 }
             } else if *column > 0 && *column > row.abs() {
-                (*row, *column) = (*row - 1, *column)  // Go up.
+                (*row, *column) = (*row - 1, *column);  // Go up.
             } else if *column < 0 && -*column > row.abs() {
-                (*row, *column) = (*row + 1, *column)  // Go down.
+                (*row, *column) = (*row + 1, *column);  // Go down.
             } else if *row > 0 && *row > column.abs() {
-                (*row, *column) = (*row, *column + 1)  // Go right.
+                (*row, *column) = (*row, *column + 1);  // Go right.
             } else if *row < 0 && -*row > column.abs() {
-                (*row, *column) = (*row, *column - 1)  // Go left.
+                (*row, *column) = (*row, *column - 1);  // Go left.
             } else {
                 panic!("Reached state that should never have been reached.");
             }
@@ -209,9 +209,27 @@ fn calculate_escape_value(x: Float, y: Float,
     let _start_of_loop = std::time::Instant::now();
 
     loop {
+        let (x_squared, y_squared) = (x_fast * x_fast, y_fast * y_fast);
+        if x_squared + y_squared > 4.0 {
+            return Some(iterations)
+        }
+        let difference_of_squares = x_squared - y_squared;
+        let double_the_product = 2.0 * x_fast * y_fast;
+        (x_fast, y_fast) = (difference_of_squares + c_x, double_the_product + c_y);
+        // Check to see if we've encountered this point before:
+        if threshold == 0.0 {  // (if no threshold was specified)
+            if (x_fast, y_fast) == (x_slow, y_slow) {
+                return None
+            }
+        } else {  // (the threshold was specified)
+            if (x_fast - x_slow).abs() <= threshold && (y_fast - y_slow).abs() <= threshold {
+                return None
+            }
+        }
+        iterations += 1;
         if let Some(bailout_to_use) = bailout {
             if iterations == bailout_to_use {
-                return None;
+                return None
             }
         }
 
@@ -235,31 +253,7 @@ fn calculate_escape_value(x: Float, y: Float,
         iterations += 1;
         if let Some(bailout_to_use) = bailout {
             if iterations == bailout_to_use {
-                return None;
-            }
-        }
-
-        let (x_squared, y_squared) = (x_fast * x_fast, y_fast * y_fast);
-        if x_squared + y_squared > 4.0 {
-            return Some(iterations)
-        }
-        let difference_of_squares = x_squared - y_squared;
-        let double_the_product = 2.0 * x_fast * y_fast;
-        (x_fast, y_fast) = (difference_of_squares + c_x, double_the_product + c_y);
-        // Check to see if we've encountered this point before:
-        if threshold == 0.0 {  // (if no threshold was specified)
-            if (x_fast, y_fast) == (x_slow, y_slow) {
                 return None
-            }
-        } else {  // (the threshold was specified)
-            if (x_fast - x_slow).abs() <= threshold && (y_fast - y_slow).abs() <= threshold {
-                return None
-            }
-        }
-        iterations += 1;
-        if let Some(bailout_to_use) = bailout {
-            if iterations == bailout_to_use {
-                return None;
             }
         }
 
@@ -490,14 +484,10 @@ fn get_user_input(window: &minifb::Window,
         return UserInput::ShowCoordinates
     } else if mouse_info.left_mouse_button_just_released() {  // (Left mouse button WAS down, but no longer.)
         let (column, row) = window.get_mouse_pos(minifb::MouseMode::Pass).unwrap();
-        let row = row as isize;  // (Convert to integer.)
-        let column = column as isize;  // (Convert to integer.)
         let (x, y) = convert_row_and_column_to_x_and_y(&info, row as Float, column as Float);
         return UserInput::ZoomIn(x, y)
     } else if mouse_info.right_mouse_button_just_released() {  // (Right mouse button WAS down, but no longer.)
         let (column, row) = window.get_mouse_pos(minifb::MouseMode::Pass).unwrap();
-        let row = row as isize;  // (Convert to integer.)
-        let column = column as isize;  // (Convert to integer.)
         let (x, y) = convert_row_and_column_to_x_and_y(&info, row as Float, column as Float);
         return UserInput::ZoomOut(2.0 * info.center_x - x, 2.0 * info.center_y - y)
     }
