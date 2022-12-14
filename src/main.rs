@@ -496,12 +496,12 @@ fn print_coordinates(window: &minifb::Window, info: &WindowAndViewportInfo) {
 --------------------------------------------------------------
 Mouse coordinates:  {}
 ",
-    format!("{:?}", round_tuple_of_floats(upper_left, decimal_places)),
-    format!("{:?}", round_tuple_of_floats(upper_right, decimal_places)),
-    format!("{:?}", round_tuple_of_floats(center, decimal_places)),
-    format!("{:?}", round_tuple_of_floats(lower_left, decimal_places)),
-    format!("{:?}", round_tuple_of_floats(lower_right, decimal_places)),
-    format!("{:?}", round_tuple_of_floats(mouse_cursor, decimal_places)));
+        format!("{:?}", round_tuple_of_floats(upper_left, decimal_places)),
+        format!("{:?}", round_tuple_of_floats(upper_right, decimal_places)),
+        format!("{:?}", round_tuple_of_floats(center, decimal_places)),
+        format!("{:?}", round_tuple_of_floats(lower_left, decimal_places)),
+        format!("{:?}", round_tuple_of_floats(lower_right, decimal_places)),
+        format!("{:?}", round_tuple_of_floats(mouse_cursor, decimal_places)));
 }
 
 
