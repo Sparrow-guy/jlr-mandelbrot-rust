@@ -428,8 +428,8 @@ fn convert_row_and_column_to_x_and_y(info: &WindowAndViewportInfo,
 
 
 // Saves a screenshot to disk with the given filename.
-// (The image_buffer must be length of width x height.)
-fn save_screenshot(filename: &str, width: usize, height: usize, image_buffer: &Vec<u32>) -> () {
+// (The image_buffer must have a length of width x height.)
+fn save_screenshot_to_filename(image_buffer: &Vec<u32>, width: usize, height: usize, filename: &str) -> () {
     // Verify that the length of the image_buffer
     // equals the width x height.  Otherwise, things
     // will break spectacularly:
@@ -451,6 +451,57 @@ fn save_screenshot(filename: &str, width: usize, height: usize, image_buffer: &V
 
     screenshot_buffer.save(filename).unwrap();
     println!("Saved screenshot to a file named:  {filename}");
+}
+
+
+// Saves a screenshot to disk with a calculated filename.
+// (The image_buffer must have a length of width x height.)
+fn save_screenshot(image_buffer: &Vec<u32>, width: usize, height: usize) -> () {
+    let now = chrono::Utc::now();
+    let filename = now.format("jlr-mandelbrot.screenshot.%Y%m%d.%H%M%S.%3f.png").to_string();
+    save_screenshot_to_filename(&image_buffer, width, height, &filename)
+}
+
+
+// Prints screen coordinates and mouse coordinates to the console.
+fn print_coordinates(window: &minifb::Window, info: &WindowAndViewportInfo) {
+    let upper_left = (info.min_x, info.max_y);
+    let upper_right = (info.max_x, info.max_y);
+    let center = (info.center_x, info.center_y);
+    let lower_left = (info.min_x, info.min_y);
+    let lower_right = (info.max_x, info.min_y);
+    let (mouse_column, mouse_row) = window.get_mouse_pos(minifb::MouseMode::Pass).unwrap();
+    let mouse_cursor = convert_row_and_column_to_x_and_y(
+                           &info,
+                           mouse_row as Float, mouse_column as Float);
+    let mouse_cursor = (mouse_cursor.0, mouse_cursor.1);
+    // We want to round the numbers to use only a specified
+    // number of digits of precision, so that they don't take
+    // up too much of the line:
+    let round_tuple_of_floats = |p: (Float, Float), decimal_places: isize| -> (Float, Float) {
+        let p0 = p.0 * (10.0 as Float).powi(decimal_places as i32);
+        let p0 = p0.round();
+        let p0 = p0 / (10.0 as Float).powi(decimal_places as i32);
+        let p1 = p.1 * (10.0 as Float).powi(decimal_places as i32);
+        let p1 = p1.round();
+        let p1 = p1 / (10.0 as Float).powi(decimal_places as i32);
+        (p0, p1)
+    };
+    let decimal_places = 7;
+    print!("Screen coordinates:
+--------------------------------------------------------------
+|{: <29}  {: >29}|
+|{: ^60}|
+|{: <29}  {: >29}|
+--------------------------------------------------------------
+Mouse coordinates:  {}
+",
+    format!("{:?}", round_tuple_of_floats(upper_left, decimal_places)),
+    format!("{:?}", round_tuple_of_floats(upper_right, decimal_places)),
+    format!("{:?}", round_tuple_of_floats(center, decimal_places)),
+    format!("{:?}", round_tuple_of_floats(lower_left, decimal_places)),
+    format!("{:?}", round_tuple_of_floats(lower_right, decimal_places)),
+    format!("{:?}", round_tuple_of_floats(mouse_cursor, decimal_places)));
 }
 
 
@@ -743,6 +794,8 @@ fn main() {
     loop {
         match user_input {
             UserInput::Quit => break 'main_event_loop,
+            UserInput::SaveScreenShot => save_screenshot(&image_buffer, info.width, info.height),
+            UserInput::ShowCoordinates => print_coordinates(&window, &info),
             UserInput::ZoomIn(x, y) => {
                 info = WindowAndViewportInfo::new(
                     info.width, info.height,
@@ -760,50 +813,6 @@ fn main() {
                 done = false;  // Let the drawing begin again!
                 user_input = UserInput::Nothing;
                 continue 'main_event_loop
-            }
-            UserInput::SaveScreenShot => {
-                let now = chrono::Utc::now();
-                let filename = now.format("jlr-mandelbrot.screenshot.%Y%m%d.%H%M%S.%3f.png").to_string();
-                save_screenshot(&filename, info.width, info.height, &image_buffer)
-            }
-            UserInput::ShowCoordinates => {
-                let upper_left = (info.min_x, info.max_y);
-                let upper_right = (info.max_x, info.max_y);
-                let center = (info.center_x, info.center_y);
-                let lower_left = (info.min_x, info.min_y);
-                let lower_right = (info.max_x, info.min_y);
-                let (mouse_column, mouse_row) = window.get_mouse_pos(minifb::MouseMode::Pass).unwrap();
-                let mouse_cursor = convert_row_and_column_to_x_and_y(
-                                       &info,
-                                       mouse_row as Float, mouse_column as Float);
-                let mouse_cursor = (mouse_cursor.0, mouse_cursor.1);
-                // We want to round the numbers to use only a specified
-                // number of digits of precision, so that they don't take
-                // up too much of the line:
-                let round_tuple_of_floats = |p: (Float, Float), decimal_places: isize| -> (Float, Float) {
-                    let p0 = p.0 * (10.0 as Float).powi(decimal_places as i32);
-                    let p0 = p0.round();
-                    let p0 = p0 / (10.0 as Float).powi(decimal_places as i32);
-                    let p1 = p.1 * (10.0 as Float).powi(decimal_places as i32);
-                    let p1 = p1.round();
-                    let p1 = p1 / (10.0 as Float).powi(decimal_places as i32);
-                    (p0, p1)
-                };
-                let decimal_places = 7;
-                print!("Screen coordinates:
---------------------------------------------------------------
-|{: <29}  {: >29}|
-|{: ^60}|
-|{: <29}  {: >29}|
---------------------------------------------------------------
-Mouse coordinates:  {}
-",
-    format!("{:?}", round_tuple_of_floats(upper_left, decimal_places)),
-    format!("{:?}", round_tuple_of_floats(upper_right, decimal_places)),
-    format!("{:?}", round_tuple_of_floats(center, decimal_places)),
-    format!("{:?}", round_tuple_of_floats(lower_left, decimal_places)),
-    format!("{:?}", round_tuple_of_floats(lower_right, decimal_places)),
-    format!("{:?}", round_tuple_of_floats(mouse_cursor, decimal_places)));
             }
             _ => ()
         }
@@ -881,9 +890,11 @@ Mouse coordinates:  {}
                 user_input = get_user_input(&window, &info, &mut mouse_info);
 
                 match user_input {
-                    UserInput::Quit => break 'main_event_loop,
                     UserInput::Nothing => (),
-                    _ => continue 'main_event_loop  // (Handled at the top of the loop.)
+                    UserInput::Quit => break 'main_event_loop,
+                    UserInput::SaveScreenShot => save_screenshot(&image_buffer, info.width, info.height),
+                    UserInput::ShowCoordinates => print_coordinates(&window, &info),
+                    _ => continue 'main_event_loop  // (The rest are handled at the top of the loop.)
                 }
             }
         }
