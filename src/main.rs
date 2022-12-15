@@ -433,7 +433,8 @@ fn save_screenshot_to_filename(image_buffer: &Vec<u32>, width: usize, height: us
     // Verify that the length of the image_buffer
     // equals the width x height.  Otherwise, things
     // will break spectacularly:
-    assert!(image_buffer.len() == width * height);
+    assert_eq!(image_buffer.len(), width * height,
+               "FATAL ERROR:  width x height does not equal the length of the image buffer.");
 
     let mut screenshot_buffer = image::ImageBuffer::new(width as u32, height as u32);
 
